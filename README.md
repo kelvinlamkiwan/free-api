@@ -32,6 +32,14 @@ The container image includes the application code and the required Poppler syste
 
 ---
 
+## Project Structure
+
+- `main.py` sets up the FastAPI app and registers routes only.
+- `routes/` contains the API endpoint definitions.
+- `handlers/` contains the classes that handle endpoint logic.
+
+---
+
 ## Endpoints
 
 ### `POST /pdf-to-image`
