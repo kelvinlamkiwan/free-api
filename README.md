@@ -25,7 +25,7 @@ The interactive API docs are available at `http://localhost:8000/docs`.
 
 ```bash
 docker build -t free-api .
-docker run --rm -p 8000:8000 free-api
+docker run --rm -p 8080:8080 free-api
 ```
 
 The container image includes the application code and the required Poppler system package.
