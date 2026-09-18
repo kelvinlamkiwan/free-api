@@ -8,10 +8,7 @@ A collection of free utility APIs built with **FastAPI** (Python).
 pip install -r requirements.txt
 ```
 
-> **Note:** The PDF-to-image conversion requires [Poppler](https://poppler.freedesktop.org/) to be installed on your system.
-> - **Ubuntu/Debian:** `sudo apt-get install poppler-utils`
-> - **macOS:** `brew install poppler`
-> - **Windows:** Download from [poppler releases](https://github.com/oschwartz10612/poppler-windows/releases) and add to PATH.
+> **Note:** PDF-to-image conversion uses [PyMuPDF](https://pymupdf.readthedocs.io/) — a pure-Python wheel with no system dependencies (no Poppler required).
 
 ## Run
 

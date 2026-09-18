@@ -3,12 +3,16 @@ import os
 import tempfile
 import zipfile
 
-from pdf2image import convert_from_bytes, pdfinfo_from_bytes
+from PIL import Image
 from fastapi import UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 
-# Maximum number of pages to convert in one request.
-# This bounds memory / bandwidth — raise it only if you accept the cost.
+try:
+    import pymupdf as fitz  # PyMuPDF >= 1.24
+except ImportError:
+    import fitz  # older PyMuPDF
+
+# Maximum number of pages to convert in one request (bounds memory / bandwidth).
 MAX_PAGES = int(os.environ.get("PDF_MAX_PAGES", "50"))
 
 
@@ -23,10 +27,9 @@ class PdfToImageHandler:
         if not pdf_bytes:
             return JSONResponse(status_code=400, content={"detail": "Uploaded file is empty."})
 
-        # 1) Read page count (cheap — no rendering) and enforce the limit.
         try:
-            info = pdfinfo_from_bytes(pdf_bytes)
-            page_count = int(info.get("Pages") or 0)
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            page_count = doc.page_count
         except Exception:
             return JSONResponse(
                 status_code=400,
@@ -34,9 +37,11 @@ class PdfToImageHandler:
             )
 
         if page_count <= 0:
+            doc.close()
             return JSONResponse(status_code=400, content={"detail": "PDF has no pages."})
 
         if page_count > MAX_PAGES:
+            doc.close()
             return JSONResponse(
                 status_code=413,
                 content={"detail": f"PDF has {page_count} pages, the maximum is {MAX_PAGES}."},
@@ -47,15 +52,10 @@ class PdfToImageHandler:
         pil_format = fmt.upper()
 
         if page_count == 1:
-            try:
-                images = convert_from_bytes(pdf_bytes, dpi=dpi, first_page=1, last_page=1)
-            except Exception:
-                return JSONResponse(
-                    status_code=400,
-                    content={"detail": "Failed to convert PDF. Ensure the file is a valid PDF."},
-                )
+            img = self._render(doc, 0, dpi)
+            doc.close()
             buf = io.BytesIO()
-            self._prepare_image(images[0], fmt).save(buf, format=pil_format)
+            self._prepare_image(img, fmt).save(buf, format=pil_format)
             buf.seek(0)
             return StreamingResponse(
                 buf,
@@ -63,41 +63,38 @@ class PdfToImageHandler:
                 headers={"Content-Disposition": f'attachment; filename="page_1.{ext}"'},
             )
 
-        # 2) Multi-page: stream a ZIP, rendering one page at a time so we never
-        #    hold the whole document in memory. The ZIP is written to a spooled
-        #    temp file (spills to disk if large) and streamed back in chunks.
+        # Multi-page: stream a ZIP, rendering one page at a time to bound memory.
         return StreamingResponse(
-            self._zip_stream(pdf_bytes, dpi, fmt, pil_format, ext, page_count),
+            self._zip_stream(doc, dpi, fmt, pil_format, ext, page_count),
             media_type="application/zip",
             headers={"Content-Disposition": 'attachment; filename="pages.zip"'},
         )
 
-    def _zip_stream(self, pdf_bytes, dpi, fmt, pil_format, ext, page_count):
-        with tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024) as spool:
-            with zipfile.ZipFile(spool, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-                for page in range(1, page_count + 1):
-                    try:
-                        images = convert_from_bytes(
-                            pdf_bytes, dpi=dpi, first_page=page, last_page=page
-                        )
-                    except Exception:
-                        continue  # skip pages that fail to render
-                    if not images:
-                        continue
-                    buf = io.BytesIO()
-                    self._prepare_image(images[0], fmt).save(buf, format=pil_format)
-                    zf.writestr(f"page_{page}.{ext}", buf.getvalue())
-            spool.seek(0)
-            while True:
-                chunk = spool.read(256 * 1024)
-                if not chunk:
-                    break
-                yield chunk
+    def _render(self, doc, page_index, dpi):
+        page = doc.load_page(page_index)
+        zoom = dpi / 72.0
+        pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+        return Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
 
-    def _prepare_image(self, image, fmt: str):
-        if fmt == "jpeg":
-            if image.mode == "P":
-                image = image.convert("RGBA")
-            if image.mode in ("RGBA", "LA"):
-                image = image.convert("RGB")
+    def _zip_stream(self, doc, dpi, fmt, pil_format, ext, page_count):
+        try:
+            with tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024) as spool:
+                with zipfile.ZipFile(spool, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+                    for page_index in range(page_count):
+                        img = self._render(doc, page_index, dpi)
+                        buf = io.BytesIO()
+                        self._prepare_image(img, fmt).save(buf, format=pil_format)
+                        zf.writestr(f"page_{page_index + 1}.{ext}", buf.getvalue())
+                spool.seek(0)
+                while True:
+                    chunk = spool.read(256 * 1024)
+                    if not chunk:
+                        break
+                    yield chunk
+        finally:
+            doc.close()
+
+    def _prepare_image(self, image, fmt):
+        if fmt == "jpeg" and image.mode != "RGB":
+            image = image.convert("RGB")
         return image
