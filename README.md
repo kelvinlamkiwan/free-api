@@ -23,6 +23,14 @@ The interactive API docs are available at `http://localhost:8000/docs`.
 
 ---
 
+## Project Structure
+
+- `main.py` sets up the FastAPI app and registers routes only.
+- `routes/` contains the API endpoint definitions.
+- `handlers/` contains the classes that handle endpoint logic.
+
+---
+
 ## Endpoints
 
 ### `POST /pdf-to-image`
