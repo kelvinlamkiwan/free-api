@@ -1,6 +1,7 @@
 from .barcode import BarcodeHandler
 from .image import ImageHandler
 from .pdf import PdfToImageHandler
+from .pdf_tools import PdfToolsHandler
 from .qrcode import QrCodeHandler
 from .root import RootHandler
 from .utils import UtilsHandler
@@ -12,4 +13,5 @@ __all__ = [
     "QrCodeHandler",
     "BarcodeHandler",
     "UtilsHandler",
+    "PdfToolsHandler",
 ]

@@ -5,7 +5,7 @@ from fastapi import APIRouter, File, Query, UploadFile
 from handlers import PdfToImageHandler
 
 
-router = APIRouter()
+router = APIRouter(tags=["pdf"])
 handler = PdfToImageHandler()
 
 
