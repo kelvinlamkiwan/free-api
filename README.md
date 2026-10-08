@@ -1,3 +1,5 @@
+[![DigitalOcean Referral Badge](https://web-platforms.sfo2.digitaloceanspaces.com/WWW/Badge%203.svg)](https://m.do.co/c/00ead228738a)
+
 # free-api
 
 A collection of free utility APIs built with **FastAPI** (Python). No API keys, no GPU, no external services — everything runs locally with pure-Python dependencies.
